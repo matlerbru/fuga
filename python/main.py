@@ -5,7 +5,7 @@ import sys
 import _thread
 import ujson
 
-NAME = 'KITCHEN'
+NAME = 'XXX'
 
 class Button:
     buttons = list()
