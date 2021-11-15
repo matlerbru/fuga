@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import serial.tools.list_ports as port_list
 import paho.mqtt.client as mqtt
 import threading
@@ -28,8 +29,9 @@ class struct:
         self.interface = None
         self.ser = None
         self.thread = None
-        self.location = None
-        self.wdt = None
+        self.location = ''
+        self.wdt = 0
+        self.connected = False
 
 def thr(stru):
     stru.ser.get_host()
@@ -51,28 +53,29 @@ def thr(stru):
                         connections.get(conn).wdt = time.time()
 
             elif message.get('button') != None:
-                result = client.publish('FUGA/' + stru.location, json.dumps(message))
-                if result[0] != 0:
-                    logging.error('Failed to send message, errorcode: ' + str(result[0]))
+                publish(stru.location, message)
+                logging.info('Button press recieved from device: ' + stru.location + ', ' + json.dumps(message))
 
             elif message.get('exception') != None:
-                result = client.publish('FUGA/' + stru.location, json.dumps(message))
-                if result[0] != 0:
-                    logging.error('Failed to send message, errorcode: ' + str(result[0])) 
+                publish(stru.location, message)
+                logging.info('Exception recieved from device: ' + stru.location + ', ' + json.dumps(message))
 
         except json.decoder.JSONDecodeError:
             logging.warning('Not able to decode json: ' + message)
-            result = client.publish('FUGA/' + 'MESSAGE_DECODER', 'Not able to decode json: ' + message)
-            if result[0] != 0:
-                logging.error('Failed to send message, errorcode: ' + str(result[0])) 
+            publish(stru.location, {'exception' : 'not able to decode json: ' + str(message)})
         except SerialException:
             logging.warning('Device disconnected: ' + stru.location)
-            result = client.publish('FUGA/' + stru.location, 'Device disconnected')
-            if result[0] != 0:
-                logging.error('Failed to send message, errorcode: ' + str(result[0])) 
+            publish(stru.location, {'warning' : 'device disconnected'})
             stru.ser.close()
             del connections[stru.interface]
             return
+
+def publish(location : str, message : dict):
+    r = client.publish('fuga/' + location.lower() + '/', json.dumps(message))
+    if r[0] != 0:
+        logging.error('Failed to send message, errorcode: ' + str(r[0])) 
+        return 1
+    return 0
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
@@ -103,15 +106,14 @@ def on_message(client, userdata, msg):
                     break
 
     except json.decoder.JSONDecodeError:
-        result = client.publish('FUGA/' + 'MESSAGE_DECODER', 'Unable to pass command: ' + msg.payload.decode())
-        if result[0] != 0:
-            logging.error('Failed to send message, errorcode: ' + str(result[0])) 
+        r = publish('system', {'exception' : 'not able to decode json: ' + msg.payload.decode()})
+        if r != 0:
             return
-
+    
 def main():
 
     log_handler = RotatingFileHandler(
-        filename='fuga.log', 
+        filename='/home/pi/source/host.log', 
         mode='a',
         maxBytes=5*1024*1024,
         backupCount=2,
@@ -131,33 +133,20 @@ def main():
     logging.info('_________________ host.py is started _________________')
 
     try:
-        file = open('setup.yml')
+        file = open('/home/pi/source/setup.yml')
         setup = yaml.load(file, Loader=yaml.FullLoader)
     except FileNotFoundError:
         logging.error('Not able to load setup.yml: File not found')
     except yaml.scanner.ScannerError:
         logging.error('Not able to load setup.yml: File not formatted correct')
 
-    '''
-    devices = get_connected_devices()
-    for device in devices:
-        s = struct()
-        s.interface = device
-        s.ser = connection(s.interface)
-        s.thread = threading.Thread(target=thr, args=(s,))
-        s.thread.start()
-        logging.info('Thread started for device on interface: ' + s.interface)
-        connections.update({device : s})
-    '''
     def watchdog():
         while True:
             time.sleep(10)
             for conn in connections.keys():
                 if connections.get(conn).wdt + setup.get('wdt_time') < time.time():
-                    result = client.publish('FUGA/' + connections.get(conn).location, 'wdt: timer expired')
                     logging.error('Watchdog timer expired on ' + connections.get(conn).location)
-                    if result[0] != 0:
-                        logging.error('Failed to send message, errorcode: ' + str(result[0])) 
+                    publish(connections.get(conn).location, {'exception' : 'wdt expired'})
             time.sleep(5)
 
     wdt = threading.Thread(target=watchdog, args=())
@@ -179,18 +168,15 @@ def main():
                 s.thread = threading.Thread(target=thr, args=(s,))
                 s.thread.start()
                 logging.info('Thread started for device on interface: ' + s.interface)
+                s.connected = True
                 connections.update({device : s})
             
-            time.sleep(60)
+            time.sleep(5)
 
             l = setup.get('devices').copy()
             for conn in connections.keys():
-                l.remove(connections.get(conn).location)
-            for device in l:
-                result = client.publish('FUGA/' + device, 'handler: not able to connect to device')
-                logging.error('handler: not able to connect to device ' + device) 
-                if result[0] != 0:
-                    logging.error('Failed to send message, errorcode: ' + str(result[0]))
+                if connections.get(conn).location != '':
+                    l.remove(connections.get(conn).location)
 
     dh = threading.Thread(target=device_handler, args=())
     dh.name = 'device_handler'
@@ -211,8 +197,3 @@ if __name__ == "__main__":
         for conn in connections:
             connections.get(conn).ser.close()
         logging.info('host.py is shutting down\n')
-
-#{"location" : "KITCHEN", "command": "enable_led", "state": "true"}
-#{"location" : "KITCHEN", "command": "enable_led", "state": "false"}
-#{"location" : "KITCHEN", "command": "set_led", "number": 0, "state": "short"} 
-#{"location" : "KITCHEN", "command": "set_led", "number": 1, "state": "on"} 
