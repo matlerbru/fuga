@@ -5,3 +5,5 @@ wdt_time: 10 #seconds
 
 devices:
   - KITCHEN
+  - LIVING_ROOM
+  - PLAYROOM
