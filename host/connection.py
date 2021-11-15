@@ -23,8 +23,3 @@ class connection:
 
     def close(self):
         self.ser.close()
-
-#{"command": "enable_led", "value": false}
-#{"command": "enable_led", "value": true}
-#{"command": "set_led", "number": 0, "state": "short"}
-#{"command": "set_led", "number": 1, "state": "on"}
