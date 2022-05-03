@@ -9,7 +9,7 @@ class Mqtt(mqtt.Client):
         self.subscriptions = []
         super().__init__(client_id)
 
-    def connect(self, address : str, port : int):
+    def connect(self, address: str, port: int):
         logged = False
         while True:
             try:
