@@ -1,9 +1,9 @@
-server_address: 192.168.1.2
-server_port: 1883
+mqtt_address: nuc
+mqtt_port: 1883
 
 wdt_time: 10 #seconds
 
 devices:
-  - KITCHEN
-  - LIVING_ROOM
-  - PLAYROOM
+  - kitchen
+  - living_room
+  - playroom
