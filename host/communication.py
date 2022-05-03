@@ -9,8 +9,6 @@ import lock
 import json
 import udev
 
-# TODO: Check mqtt disconnect stability
-
 log_handler = RotatingFileHandler(
     filename="host.log",
     mode="a",
@@ -105,6 +103,7 @@ if __name__ == "__main__":
         main()
         threading.Event().wait()
     except lock.LockedError:
+        logging.info("Application already running - shutting down")
         pass
     except Exception as e:
         logging.critical(f"Application fail: {str(e)}")
